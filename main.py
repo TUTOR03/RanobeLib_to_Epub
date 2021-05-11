@@ -41,7 +41,7 @@ print(vol)
 book = epub.EpubBook()
 client = httpx.Client()
 book_spine = []
-
+book_toc = ['nav']
 
 book.set_title(f'{book_title} [{volume_to_get}]')
 book.set_language('ru')
@@ -53,27 +53,30 @@ for chapter_i in sorted(vol):
     res = client.get(chapter_url)
     time.sleep(0.1)
     soup = BeautifulSoup(res.content, 'lxml')
-    open('test_2.html','wb').write(bytes(soup.prettify(), 'utf-8'))
     data = soup.find('div', attrs = {'class': 'reader-container'})
     imgs = data.find_all('div', attrs = {'class': 'article-image'})
     data = str(data).replace('<div class="reader-container container container_center">\n','')[:-6]
+    name = f'v{int(volume_to_get) if int(volume_to_get) == volume_to_get else volume_to_get}_c{int(chapter_i) if int(chapter_i) == chapter_i else chapter_i}'
 
     for i, ob in enumerate(imgs):
         img_src = ob.img['data-src']
         img_data = client.get(img_src).content
         ext = img_src.split('.')[-1]
-        img_name = f'images/v{int(volume_to_get) if int(volume_to_get) == volume_to_get else volume_to_get}_c{int(chapter_i) if int(chapter_i) == chapter_i else chapter_i}_{i}.{ext}'
+        img_name = f'images/{name}_{i}.{ext}'
         img = epub.EpubItem(file_name = img_name, media_type = 'image/{ext}', content = img_data)
         data = data.replace(str(ob), f'<p><img alt="{img_name}" src="{img_name}"/></p>')
         book.add_item(img)
     data = f'<h2>{vol[chapter_i]}</h2>\n{data}'
-    chapter = epub.EpubHtml(title=vol[chapter_i], file_name=f'chap_v{int(volume_to_get) if int(volume_to_get) == volume_to_get else volume_to_get}_c{int(chapter_i) if int(chapter_i) == chapter_i else chapter_i}.xhtml', lang='hr', content=bytes(data, 'utf-8'))
+    chapter = epub.EpubHtml(title=vol[chapter_i], file_name=f'chap_{name}.xhtml', lang='hr', content=bytes(data, 'utf-8'))
     book.add_item(chapter)
     book_spine.append(chapter)
+    # print([f'chap_{name}.xhtml', f'{int(chapter_i) if int(chapter_i) == chapter_i else chapter_i}.{vol[chapter_i]}'])
+    book_toc.append( epub.Link(f'chap_{name}.xhtml', f'{int(chapter_i) if int(chapter_i) == chapter_i else chapter_i}.{vol[chapter_i]}', f'chap_{name}') )
 
 book.add_item(epub.EpubNcx())
 book.add_item(epub.EpubNav())
 
 book.spine = book_spine
+book.toc = book_toc
 
-epub.write_epub(f'{book_title} [{volume_to_get}]', book, {})
+epub.write_epub(f'./results/{book_title} [{volume_to_get}].epub', book)
