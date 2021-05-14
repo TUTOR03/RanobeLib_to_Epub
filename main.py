@@ -5,17 +5,19 @@ from selenium import webdriver
 import re
 import time
 
-URL = 'https://ranobelib.me/tensei-shitara-slime-datta-ken-light-novel'
+URL = input('Ranobe url (https://ranobelib.me/{ranobe_name}):\n')
 
 options = webdriver.ChromeOptions()
 options.add_argument('--window-size=100,100')
 options.add_experimental_option("excludeSwitches", ["enable-automation"])
 options.add_experimental_option('useAutomationExtension', False)
-browser = webdriver.Chrome(chrome_options=options)
+browser = webdriver.Chrome(options=options)
 browser.get(f'{URL}?section=chapters')
 cover_img_url = BeautifulSoup(browser.page_source, 'lxml').find('div', attrs = {'class': 'media-sidebar__cover'}).img['src']
 book_title = BeautifulSoup(browser.page_source, 'lxml').find('div', attrs = {'class': 'media-name__main'}).get_text()
 volumes = {}
+
+print('Parsing ranobe nav...')
 for i in range(50):
     browser.execute_script(f'window.scrollTo(0, document.body.scrollHeight/50*{i})')
     time.sleep(0.1)
@@ -33,10 +35,18 @@ for i in range(50):
         temp = {**temp, chapter: title[1].strip() if len(title) == 2 else ''}
         volumes[volume] = temp
 browser.quit()
+print('Parsing completed')
+print('Volumes:')
+for key in volumes.keys():
+    print(key)
 
-volume_to_get = float(input('Выберите том: '))
+volume_to_get = float(input('Select volume: '))
 vol = volumes[volume_to_get]
-print(vol)
+print('Chapters:')
+for chap in vol:
+    print(f'{chap}: {vol[chap]}')
+
+print('Building book...')
 
 book = epub.EpubBook()
 client = httpx.Client()
@@ -49,7 +59,6 @@ book.set_cover(file_name = f'images/cover_img.{cover_img_url.split(".")[-1]}', c
 
 for chapter_i in sorted(vol):
     chapter_url = f'{URL}/v{int(volume_to_get) if int(volume_to_get) == volume_to_get else volume_to_get}/c{int(chapter_i) if int(chapter_i) == chapter_i else chapter_i}'
-    print(f'Scan: {volume_to_get}_{chapter_i}')
     res = client.get(chapter_url)
     time.sleep(0.1)
     soup = BeautifulSoup(res.content, 'lxml')
@@ -70,8 +79,9 @@ for chapter_i in sorted(vol):
     chapter = epub.EpubHtml(title=vol[chapter_i], file_name=f'chap_{name}.xhtml', lang='hr', content=bytes(data, 'utf-8'))
     book.add_item(chapter)
     book_spine.append(chapter)
-    # print([f'chap_{name}.xhtml', f'{int(chapter_i) if int(chapter_i) == chapter_i else chapter_i}.{vol[chapter_i]}'])
     book_toc.append( epub.Link(f'chap_{name}.xhtml', f'{int(chapter_i) if int(chapter_i) == chapter_i else chapter_i}.{vol[chapter_i]}', f'chap_{name}') )
+    print(f'Ready: {chapter_i}: {vol[chapter_i]}')
+print('Building completed')
 
 book.add_item(epub.EpubNcx())
 book.add_item(epub.EpubNav())
